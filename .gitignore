@@ -1,0 +1,43 @@
+# Dependencies
+node_modules
+files/
+uploads/
+
+# Next.js
+.next/
+out/
+
+# Build
+dist
+dist-ssr
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Local env files
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+.config/
+
+/src/generated/prisma
+
+# Environment secrets
+.env
+.env.local

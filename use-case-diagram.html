@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="only light">
+  <title>Use Case Diagram — ระบบจัดการการศึกษา</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      background-color: #ffffff !important;
+      color: #000000 !important;
+      color-scheme: only light;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    svg {
+      max-width: 100%;
+      height: auto;
+      background: #ffffff;
+    }
+  </style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1500" width="1400" height="1500" style="background:#ffffff;">
+  <defs>
+    <style>
+      .actor-label { font-size: 15px; font-weight: 700; fill: #1e293b; text-anchor: middle; font-family: 'Segoe UI', sans-serif; }
+      .actor-sub { font-size: 12px; font-weight: 600; fill: #64748b; text-anchor: middle; font-family: 'Segoe UI', sans-serif; }
+      .uc-text { font-size: 12px; fill: #1e293b; text-anchor: middle; dominant-baseline: central; font-family: 'Segoe UI', sans-serif; font-weight: 600; }
+      .uc-text-sm { font-size: 10px; fill: #64748b; text-anchor: middle; dominant-baseline: central; font-family: 'Segoe UI', sans-serif; }
+      .system-title { font-size: 22px; font-weight: 700; fill: #1e40af; text-anchor: middle; font-family: 'Segoe UI', sans-serif; }
+      .section-label { font-size: 13px; font-weight: 700; fill: #334155; text-anchor: middle; font-family: 'Segoe UI', sans-serif; text-transform: uppercase; letter-spacing: 1px; }
+    </style>
+
+    <!-- Gradient fills for use case ovals -->
+    <linearGradient id="grad-shared" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#e0e7ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c7d2fe;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad-student" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#dbeafe;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#bfdbfe;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad-teacher" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#dcfce7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#bbf7d0;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad-admin" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#fef9c3;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fde68a;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Drop shadow -->
+    <filter id="shadow" x="-5%" y="-10%" width="110%" height="130%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+
+  <!-- White background rect -->
+  <rect x="0" y="0" width="1400" height="1500" fill="#ffffff"/>
+
+  <!-- System Boundary -->
+  <rect x="200" y="40" width="1000" height="1400" rx="18" ry="18" fill="#f8fafc" stroke="#3b82f6" stroke-width="2.5" stroke-dasharray="14 5"/>
+  <rect x="460" y="22" width="480" height="36" rx="8" fill="#ffffff" stroke="none"/>
+  <text x="700" y="48" class="system-title">ระบบจัดการการศึกษา (Education Management System)</text>
+
+  <!-- ===================== ACTORS ===================== -->
+
+  <!-- Student Actor (left) -->
+  <g transform="translate(85, 380)">
+    <circle cx="0" cy="-20" r="18" fill="#dbeafe" stroke="#2563eb" stroke-width="2.5"/>
+    <line x1="0" y1="-2" x2="0" y2="36" stroke="#2563eb" stroke-width="2.5"/>
+    <line x1="-22" y1="14" x2="22" y2="14" stroke="#2563eb" stroke-width="2.5"/>
+    <line x1="0" y1="36" x2="-16" y2="60" stroke="#2563eb" stroke-width="2.5"/>
+    <line x1="0" y1="36" x2="16" y2="60" stroke="#2563eb" stroke-width="2.5"/>
+    <text x="0" y="82" class="actor-label" fill="#2563eb">นิสิต</text>
+    <text x="0" y="98" class="actor-sub">(Student)</text>
+  </g>
+
+  <!-- Teacher Actor (left-bottom) -->
+  <g transform="translate(85, 980)">
+    <circle cx="0" cy="-20" r="18" fill="#dcfce7" stroke="#16a34a" stroke-width="2.5"/>
+    <line x1="0" y1="-2" x2="0" y2="36" stroke="#16a34a" stroke-width="2.5"/>
+    <line x1="-22" y1="14" x2="22" y2="14" stroke="#16a34a" stroke-width="2.5"/>
+    <line x1="0" y1="36" x2="-16" y2="60" stroke="#16a34a" stroke-width="2.5"/>
+    <line x1="0" y1="36" x2="16" y2="60" stroke="#16a34a" stroke-width="2.5"/>
+    <text x="0" y="82" class="actor-label" fill="#16a34a">อาจารย์</text>
+    <text x="0" y="98" class="actor-sub">(Teacher)</text>
+  </g>
+
+  <!-- Admin Actor (right) -->
+  <g transform="translate(1315, 760)">
+    <circle cx="0" cy="-20" r="18" fill="#fef9c3" stroke="#ca8a04" stroke-width="2.5"/>
+    <line x1="0" y1="-2" x2="0" y2="36" stroke="#ca8a04" stroke-width="2.5"/>
+    <line x1="-22" y1="14" x2="22" y2="14" stroke="#ca8a04" stroke-width="2.5"/>
+    <line x1="0" y1="36" x2="-16" y2="60" stroke="#ca8a04" stroke-width="2.5"/>
+    <line x1="0" y1="36" x2="16" y2="60" stroke="#ca8a04" stroke-width="2.5"/>
+    <text x="0" y="82" class="actor-label" fill="#ca8a04">ผู้ดูแลระบบ</text>
+    <text x="0" y="98" class="actor-sub">(Admin)</text>
+  </g>
+
+  <!-- ===================== SHARED USE CASES ===================== -->
+  <text x="700" y="90" class="section-label" fill="#6366f1">SHARED USE CASES</text>
+
+  <ellipse cx="700" cy="125" rx="115" ry="28" fill="url(#grad-shared)" stroke="#6366f1" stroke-width="2" filter="url(#shadow)"/>
+  <text x="700" y="121" class="uc-text">เข้าสู่ระบบ</text>
+  <text x="700" y="135" class="uc-text-sm">(Login)</text>
+
+  <ellipse cx="700" cy="190" rx="115" ry="28" fill="url(#grad-shared)" stroke="#6366f1" stroke-width="2" filter="url(#shadow)"/>
+  <text x="700" y="186" class="uc-text">ออกจากระบบ</text>
+  <text x="700" y="200" class="uc-text-sm">(Logout)</text>
+
+  <!-- ===================== STUDENT USE CASES ===================== -->
+  <text x="430" y="255" class="section-label" fill="#2563eb">STUDENT USE CASES</text>
+
+  <ellipse cx="430" cy="290" rx="125" ry="28" fill="url(#grad-student)" stroke="#2563eb" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="286" class="uc-text">สมัครสมาชิก</text>
+  <text x="430" y="300" class="uc-text-sm">(Register)</text>
+
+  <ellipse cx="430" cy="355" rx="125" ry="28" fill="url(#grad-student)" stroke="#2563eb" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="351" class="uc-text">รีเซ็ตรหัสผ่าน</text>
+  <text x="430" y="365" class="uc-text-sm">(Reset Password via OTP)</text>
+
+  <ellipse cx="430" cy="420" rx="125" ry="28" fill="url(#grad-student)" stroke="#2563eb" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="416" class="uc-text">ดูภาพรวม Dashboard</text>
+  <text x="430" y="430" class="uc-text-sm">(Student Dashboard)</text>
+
+  <ellipse cx="430" cy="485" rx="140" ry="28" fill="url(#grad-student)" stroke="#2563eb" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="481" class="uc-text">ดูรายวิชาที่ลงทะเบียน</text>
+  <text x="430" y="495" class="uc-text-sm">(View Registered Courses)</text>
+
+  <ellipse cx="430" cy="550" rx="125" ry="28" fill="url(#grad-student)" stroke="#2563eb" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="546" class="uc-text">วางแผนการเรียน</text>
+  <text x="430" y="560" class="uc-text-sm">(Course Planner)</text>
+
+  <ellipse cx="430" cy="615" rx="155" ry="28" fill="url(#grad-student)" stroke="#2563eb" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="611" class="uc-text">ตรวจสอบสถานะการลงทะเบียน</text>
+  <text x="430" y="625" class="uc-text-sm">(Registration Status)</text>
+
+  <ellipse cx="430" cy="680" rx="155" ry="28" fill="url(#grad-student)" stroke="#2563eb" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="676" class="uc-text">ตรวจสอบการสำเร็จการศึกษา</text>
+  <text x="430" y="690" class="uc-text-sm">(Graduation Check)</text>
+
+  <ellipse cx="430" cy="745" rx="145" ry="28" fill="url(#grad-student)" stroke="#2563eb" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="741" class="uc-text">ดูตารางเรียนและแจ้งเตือน</text>
+  <text x="430" y="755" class="uc-text-sm">(Schedule &amp; Notifications)</text>
+
+  <ellipse cx="430" cy="810" rx="125" ry="28" fill="url(#grad-student)" stroke="#2563eb" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="806" class="uc-text">จัดการโปรไฟล์</text>
+  <text x="430" y="820" class="uc-text-sm">(Manage Profile)</text>
+
+  <!-- ===================== TEACHER USE CASES ===================== -->
+  <text x="430" cy="880" y="880" class="section-label" fill="#16a34a">TEACHER USE CASES</text>
+
+  <ellipse cx="430" cy="915" rx="135" ry="28" fill="url(#grad-teacher)" stroke="#16a34a" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="911" class="uc-text">ดูภาพรวม Dashboard</text>
+  <text x="430" y="925" class="uc-text-sm">(Teacher Dashboard)</text>
+
+  <ellipse cx="430" cy="980" rx="125" ry="28" fill="url(#grad-teacher)" stroke="#16a34a" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="976" class="uc-text">จัดการรายวิชา</text>
+  <text x="430" y="990" class="uc-text-sm">(Manage Courses)</text>
+
+  <ellipse cx="430" cy="1045" rx="125" ry="28" fill="url(#grad-teacher)" stroke="#16a34a" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="1041" class="uc-text">ดูรายชื่อนิสิต</text>
+  <text x="430" y="1055" class="uc-text-sm">(View Student List)</text>
+
+  <ellipse cx="430" cy="1110" rx="130" ry="28" fill="url(#grad-teacher)" stroke="#16a34a" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="1106" class="uc-text">จัดการเรียนชดเชย</text>
+  <text x="430" y="1120" class="uc-text-sm">(Makeup Class)</text>
+
+  <ellipse cx="430" cy="1175" rx="125" ry="28" fill="url(#grad-teacher)" stroke="#16a34a" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="430" y="1171" class="uc-text">จัดการโปรไฟล์</text>
+  <text x="430" y="1185" class="uc-text-sm">(Manage Profile)</text>
+
+  <!-- ===================== ADMIN USE CASES ===================== -->
+  <text x="960" y="565" class="section-label" fill="#ca8a04">ADMIN USE CASES</text>
+
+  <ellipse cx="960" cy="600" rx="145" ry="28" fill="url(#grad-admin)" stroke="#ca8a04" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="960" y="596" class="uc-text">ดูภาพรวมระบบ Dashboard</text>
+  <text x="960" y="610" class="uc-text-sm">(Admin Dashboard)</text>
+
+  <ellipse cx="960" cy="665" rx="125" ry="28" fill="url(#grad-admin)" stroke="#ca8a04" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="960" y="661" class="uc-text">จัดการผู้ใช้</text>
+  <text x="960" y="675" class="uc-text-sm">(Manage Users)</text>
+
+  <ellipse cx="960" cy="730" rx="125" ry="28" fill="url(#grad-admin)" stroke="#ca8a04" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="960" y="726" class="uc-text">นำเข้าข้อมูล</text>
+  <text x="960" y="740" class="uc-text-sm">(Import Data)</text>
+
+  <ellipse cx="960" cy="795" rx="130" ry="28" fill="url(#grad-admin)" stroke="#ca8a04" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="960" y="791" class="uc-text">จัดการหลักสูตร</text>
+  <text x="960" y="805" class="uc-text-sm">(Manage Curriculum)</text>
+
+  <ellipse cx="960" cy="860" rx="135" ry="28" fill="url(#grad-admin)" stroke="#ca8a04" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="960" y="856" class="uc-text">จัดการประกาศ</text>
+  <text x="960" y="870" class="uc-text-sm">(Manage Announcements)</text>
+
+
+  <!-- ===================== CONNECTION LINES ===================== -->
+
+  <!-- Shared: Login -->
+  <line x1="107" y1="370" x2="585" y2="125" stroke="#6366f1" stroke-width="1.5" opacity="0.6"/>
+  <line x1="107" y1="970" x2="585" y2="130" stroke="#6366f1" stroke-width="1.5" opacity="0.6"/>
+  <line x1="1293" y1="748" x2="815" y2="125" stroke="#6366f1" stroke-width="1.5" opacity="0.6"/>
+
+  <!-- Shared: Logout -->
+  <line x1="107" y1="400" x2="585" y2="190" stroke="#6366f1" stroke-width="1.5" opacity="0.4" stroke-dasharray="5 3"/>
+  <line x1="107" y1="1000" x2="585" y2="195" stroke="#6366f1" stroke-width="1.5" opacity="0.4" stroke-dasharray="5 3"/>
+  <line x1="1293" y1="758" x2="815" y2="190" stroke="#6366f1" stroke-width="1.5" opacity="0.4" stroke-dasharray="5 3"/>
+
+  <!-- Student connections -->
+  <line x1="107" y1="375" x2="305" y2="290" stroke="#2563eb" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="380" x2="305" y2="355" stroke="#2563eb" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="385" x2="305" y2="420" stroke="#2563eb" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="390" x2="290" y2="485" stroke="#2563eb" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="400" x2="305" y2="550" stroke="#2563eb" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="410" x2="275" y2="615" stroke="#2563eb" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="415" x2="275" y2="680" stroke="#2563eb" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="420" x2="285" y2="745" stroke="#2563eb" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="425" x2="305" y2="810" stroke="#2563eb" stroke-width="1.5" opacity="0.7"/>
+
+  <!-- Teacher connections -->
+  <line x1="107" y1="975" x2="295" y2="915" stroke="#16a34a" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="980" x2="305" y2="980" stroke="#16a34a" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="990" x2="305" y2="1045" stroke="#16a34a" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="1000" x2="300" y2="1110" stroke="#16a34a" stroke-width="1.5" opacity="0.7"/>
+  <line x1="107" y1="1005" x2="305" y2="1175" stroke="#16a34a" stroke-width="1.5" opacity="0.7"/>
+
+  <!-- Admin connections -->
+  <line x1="1293" y1="750" x2="1105" y2="600" stroke="#ca8a04" stroke-width="1.5" opacity="0.7"/>
+  <line x1="1293" y1="755" x2="1085" y2="665" stroke="#ca8a04" stroke-width="1.5" opacity="0.7"/>
+  <line x1="1293" y1="760" x2="1085" y2="730" stroke="#ca8a04" stroke-width="1.5" opacity="0.7"/>
+  <line x1="1293" y1="768" x2="1090" y2="795" stroke="#ca8a04" stroke-width="1.5" opacity="0.7"/>
+  <line x1="1293" y1="775" x2="1095" y2="860" stroke="#ca8a04" stroke-width="1.5" opacity="0.7"/>
+
+
+  <!-- ===================== LEGEND ===================== -->
+  <rect x="250" y="1280" width="700" height="85" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="290" y="1305" style="font-size:13px; font-weight:700; fill:#1e293b; font-family:'Segoe UI',sans-serif;">Legend:</text>
+
+  <ellipse cx="380" cy="1325" rx="28" ry="11" fill="url(#grad-shared)" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="430" y="1329" style="font-size:11px; fill:#334155; font-family:'Segoe UI',sans-serif;">ใช้ร่วมกัน (Shared)</text>
+
+  <ellipse cx="590" cy="1325" rx="28" ry="11" fill="url(#grad-student)" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="640" y="1329" style="font-size:11px; fill:#334155; font-family:'Segoe UI',sans-serif;">นิสิต (Student)</text>
+
+  <ellipse cx="380" cy="1350" rx="28" ry="11" fill="url(#grad-teacher)" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="430" y="1354" style="font-size:11px; fill:#334155; font-family:'Segoe UI',sans-serif;">อาจารย์ (Teacher)</text>
+
+  <ellipse cx="590" cy="1350" rx="28" ry="11" fill="url(#grad-admin)" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="640" y="1354" style="font-size:11px; fill:#334155; font-family:'Segoe UI',sans-serif;">ผู้ดูแลระบบ (Admin)</text>
+
+</svg>
+</body>
+</html>

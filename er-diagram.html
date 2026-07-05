@@ -1,0 +1,462 @@
+<style>
+  :root {
+    --bg: #f7f8fb;
+    --panel: #ffffff;
+    --ink: #1a1d29;
+    --ink-soft: #5b6172;
+    --ink-faint: #8b91a3;
+    --line: #e3e6ef;
+    --line-strong: #cfd4e2;
+    --field-bg: #fbfcfe;
+    --shadow: 0 1px 2px rgba(20,24,45,.06), 0 8px 24px rgba(20,24,45,.06);
+    --z-identity: #6366f1;
+    --z-org: #0d9488;
+    --z-people: #d97706;
+    --z-courses: #8b5cf6;
+    --z-scheduling: #e11d48;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif;
+    --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1117;
+      --panel: #171a22;
+      --ink: #eceef5;
+      --ink-soft: #a2a8bb;
+      --ink-faint: #6b7186;
+      --line: #262b38;
+      --line-strong: #333a4c;
+      --field-bg: #1c2029;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f7f8fb; --panel: #ffffff; --ink: #1a1d29; --ink-soft: #5b6172;
+    --ink-faint: #8b91a3; --line: #e3e6ef; --line-strong: #cfd4e2;
+    --field-bg: #fbfcfe; --shadow: 0 1px 2px rgba(20,24,45,.06), 0 8px 24px rgba(20,24,45,.06);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1117; --panel: #171a22; --ink: #eceef5; --ink-soft: #a2a8bb;
+    --ink-faint: #6b7186; --line: #262b38; --line-strong: #333a4c;
+    --field-bg: #1c2029; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.45);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header.top {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px;
+    padding: 16px 24px;
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .title-block h1 {
+    margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.01em;
+  }
+  .title-block p {
+    margin: 2px 0 0; font-size: 12.5px; color: var(--ink-soft);
+  }
+  .title-block code {
+    font-family: var(--font-mono); font-size: 11.5px;
+    background: var(--field-bg); padding: 1px 5px; border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-left: auto; }
+  .legend .zones { display: flex; flex-wrap: wrap; gap: 10px; }
+  .zone-key { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-soft); }
+  .zone-key .swatch { width: 10px; height: 10px; border-radius: 3px; }
+  .notation { display: flex; gap: 14px; align-items: center; padding-left: 14px; border-left: 1px solid var(--line); }
+  .notation span { font-size: 11.5px; color: var(--ink-soft); display: flex; align-items: center; gap: 5px; }
+  .notation svg { display: block; }
+
+  .controls { display: flex; gap: 6px; align-items: center; }
+  .controls button {
+    font-family: var(--font-sans); font-size: 14px; font-weight: 600;
+    width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line-strong);
+    display: grid; place-items: center; transition: background .12s, border-color .12s;
+  }
+  .controls button:hover { background: var(--field-bg); border-color: var(--z-identity); }
+  .controls button:focus-visible { outline: 2px solid var(--z-identity); outline-offset: 2px; }
+  .controls .zoom-label { font-size: 12px; color: var(--ink-soft); min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; }
+
+  .viewport {
+    width: 100%; height: calc(100vh - 66px);
+    overflow: auto; position: relative;
+    cursor: grab;
+  }
+  .viewport.panning { cursor: grabbing; user-select: none; }
+
+  .stage-wrap { transform-origin: 0 0; }
+  .canvas { position: relative; width: 1700px; height: 1560px; }
+
+  .zone-band {
+    position: absolute; top: 24px; height: 1500px; border-radius: 16px;
+    border: 1px dashed color-mix(in srgb, var(--zc) 40%, var(--line));
+    background: color-mix(in srgb, var(--zc) 5%, transparent);
+  }
+  .zone-band .zone-label {
+    position: absolute; top: -13px; left: 18px;
+    font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--zc); background: var(--bg); padding: 2px 9px; border-radius: 20px;
+    border: 1px solid color-mix(in srgb, var(--zc) 35%, var(--line));
+  }
+
+  svg.links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: visible; }
+  svg.links path { fill: none; stroke-width: 1.6; opacity: .55; transition: opacity .15s, stroke-width .15s; }
+
+  .entity {
+    position: absolute; width: 264px; z-index: 10;
+    background: var(--panel); border: 1px solid var(--line-strong);
+    border-radius: 12px; box-shadow: var(--shadow); overflow: hidden;
+    transition: box-shadow .15s, transform .15s;
+  }
+  .entity.dim { opacity: .28; }
+  .entity.focus { box-shadow: 0 0 0 2px var(--zc), var(--shadow); z-index: 20; }
+  .entity .ehead {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px; cursor: pointer;
+    background: color-mix(in srgb, var(--zc) 12%, var(--panel));
+    border-bottom: 1px solid var(--line);
+  }
+  .entity .ehead .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--zc); flex: none; }
+  .entity .ehead .name { font-family: var(--font-mono); font-size: 13.5px; font-weight: 650; color: var(--ink); }
+  .entity .ehead .cnt { margin-left: auto; font-size: 10.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  .entity ul { list-style: none; margin: 0; padding: 4px 0; }
+  .entity li {
+    display: flex; align-items: center; gap: 8px;
+    padding: 3px 12px; font-family: var(--font-mono); font-size: 12px; line-height: 1.4;
+  }
+  .entity li:nth-child(even) { background: var(--field-bg); }
+  .entity li .fname { color: var(--ink); font-weight: 500; }
+  .entity li.key .fname { font-weight: 650; }
+  .entity li .ftype { margin-left: auto; color: var(--ink-faint); font-size: 10.5px; letter-spacing: .01em; }
+  .entity li .tag {
+    font-family: var(--font-sans); font-size: 8.5px; font-weight: 800; letter-spacing: .04em;
+    padding: 1px 4px; border-radius: 3px; line-height: 1.3; flex: none;
+  }
+  .tag.pk { color: #92400e; background: #fef3c7; }
+  .tag.fk { color: #3730a3; background: #e0e7ff; }
+  .tag.uk { color: #065f46; background: #d1fae5; }
+  @media (prefers-color-scheme: dark) {
+    .tag.pk { color: #fcd34d; background: #422b06; }
+    .tag.fk { color: #c7d2fe; background: #262b5c; }
+    .tag.uk { color: #6ee7b7; background: #06382a; }
+  }
+  :root[data-theme="dark"] .tag.pk { color: #fcd34d; background: #422b06; }
+  :root[data-theme="dark"] .tag.fk { color: #c7d2fe; background: #262b5c; }
+  :root[data-theme="dark"] .tag.uk { color: #6ee7b7; background: #06382a; }
+  :root[data-theme="light"] .tag.pk { color: #92400e; background: #fef3c7; }
+  :root[data-theme="light"] .tag.fk { color: #3730a3; background: #e0e7ff; }
+  :root[data-theme="light"] .tag.uk { color: #065f46; background: #d1fae5; }
+
+  .hint {
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+    font-size: 11.5px; color: var(--ink-soft); background: color-mix(in srgb, var(--panel) 90%, transparent);
+    padding: 6px 14px; border-radius: 20px; border: 1px solid var(--line); z-index: 40;
+    box-shadow: var(--shadow); pointer-events: none;
+  }
+</style>
+
+<header class="top">
+  <div class="title-block">
+    <h1>Education Management System — ER Diagram</h1>
+    <p>19 tables from <code>prisma/schema.prisma</code> · MySQL · click a table to isolate its relationships</p>
+  </div>
+  <div class="legend">
+    <div class="zones" id="zoneKeys"></div>
+    <div class="notation">
+      <span>
+        <svg width="34" height="12"><line x1="2" y1="6" x2="32" y2="6" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M32 6 l-8 -4 M32 6 l-8 4 M24 6 l0 0" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
+        one&nbsp;→&nbsp;many
+      </span>
+      <span>
+        <svg width="34" height="12"><line x1="2" y1="6" x2="32" y2="6" stroke="currentColor" stroke-width="1.6" stroke-dasharray="4 3"/></svg>
+        1:1
+      </span>
+    </div>
+  </div>
+  <div class="controls">
+    <button id="zoomOut" title="Zoom out">−</button>
+    <span class="zoom-label" id="zoomLabel">100%</span>
+    <button id="zoomIn" title="Zoom in">+</button>
+    <button id="zoomReset" title="Fit / reset" style="width:auto;padding:0 10px;font-size:12px;">Fit</button>
+  </div>
+</header>
+
+<div class="viewport" id="viewport">
+  <div class="stage-wrap" id="stageWrap">
+    <div class="canvas" id="canvas">
+      <svg class="links" id="links">
+        <defs>
+          <marker id="crow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M11 7 L2 2 M11 7 L2 12 M3 7 L11 7" fill="none" stroke="context-stroke" stroke-width="1.5"/>
+          </marker>
+          <marker id="one" markerWidth="10" markerHeight="14" refX="2" refY="7" orient="auto" markerUnits="userSpaceOnUse">
+            <circle cx="5" cy="7" r="3" fill="var(--panel)" stroke="context-stroke" stroke-width="1.5"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </div>
+</div>
+<div class="hint" id="hint">Drag to pan · scroll to move · +/− to zoom</div>
+
+<script>
+const ZONES = {
+  identity:   { label: "Identity & Access", color: "var(--z-identity)", x: 20,   w: 320 },
+  org:        { label: "Organization",      color: "var(--z-org)",      x: 356,  w: 320 },
+  people:     { label: "People",            color: "var(--z-people)",   x: 692,  w: 320 },
+  courses:    { label: "Courses",           color: "var(--z-courses)",  x: 1028, w: 320 },
+  scheduling: { label: "Scheduling & Enrollment", color: "var(--z-scheduling)", x: 1364, w: 320 },
+};
+
+// [name, type, flags]  flags: p=PK f=FK u=UK
+const E = {
+  users: { zone:"identity", x:40, y:96, cols:[
+    ["user_id","INT","p"],["email","VARCHAR(100)","u"],["password_hash","VARCHAR(255)"],
+    ["role","ENUM"],["first_name","VARCHAR(100)"],["last_name","VARCHAR(100)"],
+    ["phone","VARCHAR(20)"],["address","VARCHAR(300)"],["avatar_url","VARCHAR(500)"],
+    ["is_active","BOOL"],["approval_status","ENUM"],["approved_at","DATETIME"],
+    ["approved_by","INT"],["created_at","DATETIME"],["updated_at","DATETIME"],
+  ]},
+  otp_verifications: { zone:"identity", x:40, y:660, cols:[
+    ["otp_id","INT","p"],["user_id","INT","f"],["otp_code","VARCHAR(6)"],
+    ["purpose","ENUM"],["expires_at","DATETIME"],["is_used","BOOL"],["created_at","DATETIME"],
+  ]},
+  notifications: { zone:"identity", x:40, y:940, cols:[
+    ["notification_id","INT","p"],["user_id","INT","f"],["title","VARCHAR(300)"],
+    ["message","TEXT"],["type","ENUM"],["is_read","BOOL"],["created_at","DATETIME"],
+  ]},
+  import_logs: { zone:"identity", x:40, y:1220, cols:[
+    ["import_id","INT","p"],["imported_by","INT","f"],["file_name","VARCHAR(300)"],
+    ["import_type","ENUM"],["total_rows","INT"],["success_rows","INT"],["error_rows","INT"],
+    ["status","ENUM"],["created_at","DATETIME"],
+  ]},
+
+  faculties: { zone:"org", x:376, y:96, cols:[
+    ["faculty_id","INT","p"],["faculty_name","VARCHAR(200)"],["faculty_code","VARCHAR(10)","u"],
+  ]},
+  departments: { zone:"org", x:376, y:280, cols:[
+    ["department_id","INT","p"],["faculty_id","INT","f"],["department_name","VARCHAR(200)"],
+    ["department_code","VARCHAR(10)","u"],
+  ]},
+  curriculums: { zone:"org", x:376, y:500, cols:[
+    ["curriculum_id","INT","p"],["curriculum_name","VARCHAR(300)"],["department_id","INT","f"],
+    ["year","INT"],["total_credits","INT"],["status","ENUM"],["created_at","DATETIME"],
+  ]},
+  curriculum_courses: { zone:"org", x:376, y:800, cols:[
+    ["id","INT","p"],["curriculum_id","INT","f"],["course_id","INT","f"],
+    ["semester","INT"],["year_level","INT"],
+  ]},
+  announcements: { zone:"org", x:376, y:1050, cols:[
+    ["announcement_id","INT","p"],["title","VARCHAR(300)"],["content","TEXT"],
+    ["target_role","ENUM"],["section_id","INT","f"],["is_pinned","BOOL"],
+    ["created_by","INT","f"],["created_at","DATETIME"],
+  ]},
+
+  teachers: { zone:"people", x:712, y:150, cols:[
+    ["teacher_id","INT","p"],["user_id","INT","fu"],["teacher_code","VARCHAR(20)","u"],
+    ["department_id","INT","f"],["position","VARCHAR(100)"],["office_room","VARCHAR(100)"],
+    ["specialization","VARCHAR(300)"],
+  ]},
+  students: { zone:"people", x:712, y:560, cols:[
+    ["student_id","INT","p"],["user_id","INT","fu"],["student_code","VARCHAR(20)","u"],
+    ["department_id","INT","f"],["admission_year","INT"],["status","ENUM"],
+    ["advisor_id","INT","f"],["custom_semesters","JSON"],
+  ]},
+
+  courses: { zone:"courses", x:1048, y:150, cols:[
+    ["course_id","INT","p"],["course_code","VARCHAR(20)","u"],["course_name","VARCHAR(300)"],
+    ["credits","INT"],["course_type","ENUM"],["department_id","INT","f"],
+    ["coordinator_id","INT","f"],["description","TEXT"],
+  ]},
+  course_prerequisites: { zone:"courses", x:1048, y:530, cols:[
+    ["id","INT","p"],["course_id","INT","f"],["prerequisite_id","INT","f"],
+  ]},
+  course_plans: { zone:"courses", x:1048, y:730, cols:[
+    ["plan_id","INT","p"],["student_id","INT","f"],["course_id","INT","f"],
+    ["planned_semester","INT"],["planned_year","INT"],["status","ENUM"],
+  ]},
+
+  semesters: { zone:"scheduling", x:1384, y:96, cols:[
+    ["semester_id","INT","p"],["semester_name","VARCHAR(50)"],["academic_year","INT"],
+    ["semester_number","INT"],["start_date","DATE"],["end_date","DATE"],
+    ["is_current","BOOL"],["reg_open_date","DATETIME"],["reg_close_date","DATETIME"],
+  ]},
+  course_sections: { zone:"scheduling", x:1384, y:470, cols:[
+    ["section_id","INT","p"],["course_id","INT","f"],["semester_id","INT","f"],
+    ["section_number","VARCHAR(10)"],["teacher_id","INT","f"],["max_students","INT"],
+    ["current_students","INT"],
+  ]},
+  schedules: { zone:"scheduling", x:1384, y:770, cols:[
+    ["schedule_id","INT","p"],["section_id","INT","f"],["day_of_week","ENUM"],
+    ["start_time","TIME"],["end_time","TIME"],["room","VARCHAR(50)"],["building","VARCHAR(100)"],
+  ]},
+  enrollments: { zone:"scheduling", x:1384, y:1050, cols:[
+    ["enrollment_id","INT","p"],["student_id","INT","f"],["section_id","INT","f"],
+    ["status","ENUM"],["grade","VARCHAR(5)"],["midterm_score","INT"],
+    ["final_score","INT"],["enrolled_at","DATETIME"],
+  ]},
+  makeup_classes: { zone:"scheduling", x:1384, y:1330, cols:[
+    ["makeup_id","INT","p"],["section_id","INT","f"],["original_date","DATE"],
+    ["makeup_date","DATE"],["reason","TEXT"],["status","ENUM"],["created_by","INT","f"],
+  ]},
+};
+
+// [from(one), to(many), oneToOne?]
+const REL = [
+  ["users","students",true], ["users","teachers",true],
+  ["users","otp_verifications"], ["users","notifications"],
+  ["users","import_logs"], ["users","announcements"],
+  ["faculties","departments"],
+  ["departments","curriculums"], ["departments","teachers"],
+  ["departments","students"], ["departments","courses"],
+  ["teachers","students"], ["teachers","courses"],
+  ["teachers","course_sections"], ["teachers","makeup_classes"],
+  ["curriculums","curriculum_courses"], ["courses","curriculum_courses"],
+  ["courses","course_prerequisites"], ["courses","course_prerequisites"],
+  ["courses","course_sections"], ["courses","course_plans"],
+  ["students","enrollments"], ["students","course_plans"],
+  ["semesters","course_sections"],
+  ["course_sections","schedules"], ["course_sections","enrollments"],
+  ["course_sections","makeup_classes"], ["course_sections","announcements"],
+];
+
+const canvas = document.getElementById("canvas");
+const svg = document.getElementById("links");
+const zoneKeys = document.getElementById("zoneKeys");
+
+// zone bands + legend keys
+for (const [k, z] of Object.entries(ZONES)) {
+  const band = document.createElement("div");
+  band.className = "zone-band";
+  band.style.left = z.x + "px"; band.style.width = z.w + "px"; band.style.setProperty("--zc", z.color);
+  band.innerHTML = `<span class="zone-label">${z.label}</span>`;
+  canvas.appendChild(band);
+
+  const key = document.createElement("div");
+  key.className = "zone-key";
+  key.innerHTML = `<span class="swatch" style="background:${z.color}"></span>${z.label}`;
+  zoneKeys.appendChild(key);
+}
+
+// entity cards
+const nodes = {};
+for (const [key, e] of Object.entries(E)) {
+  const zc = ZONES[e.zone].color;
+  const card = document.createElement("div");
+  card.className = "entity"; card.dataset.key = key;
+  card.style.left = e.x + "px"; card.style.top = e.y + "px"; card.style.setProperty("--zc", zc);
+  const rows = e.cols.map(([n,t,fl=""]) => {
+    const tags = [];
+    if (fl.includes("p")) tags.push('<span class="tag pk">PK</span>');
+    if (fl.includes("f")) tags.push('<span class="tag fk">FK</span>');
+    if (fl.includes("u")) tags.push('<span class="tag uk">UK</span>');
+    const isKey = fl.includes("p") || fl.includes("f");
+    return `<li class="${isKey?'key':''}"><span class="fname">${n}</span>${tags.join("")}<span class="ftype">${t}</span></li>`;
+  }).join("");
+  card.innerHTML = `<div class="ehead"><span class="dot"></span><span class="name">${key}</span><span class="cnt">${e.cols.length}</span></div><ul>${rows}</ul>`;
+  canvas.appendChild(card);
+  nodes[key] = card;
+}
+
+// draw connectors from real layout coords
+function anchors(a, b) {
+  const ax=a.offsetLeft, ay=a.offsetTop, aw=a.offsetWidth, ah=a.offsetHeight;
+  const bx=b.offsetLeft, by=b.offsetTop, bw=b.offsetWidth, bh=b.offsetHeight;
+  const acx=ax+aw/2, acy=ay+ah/2, bcx=bx+bw/2, bcy=by+bh/2;
+  const dx=bcx-acx, dy=bcy-acy;
+  let sx,sy,tx,ty,path;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    sx = dx>0 ? ax+aw : ax; tx = dx>0 ? bx : bx+bw; sy=acy; ty=bcy;
+    const k=Math.abs(dx)*0.42;
+    path=`M${sx} ${sy} C ${sx+(dx>0?k:-k)} ${sy} ${tx+(dx>0?-k:k)} ${ty} ${tx} ${ty}`;
+  } else {
+    sy = dy>0 ? ay+ah : ay; ty = dy>0 ? by : by+bh; sx=acx; tx=bcx;
+    const k=Math.abs(dy)*0.42;
+    path=`M${sx} ${sy} C ${sx} ${sy+(dy>0?k:-k)} ${tx} ${ty+(dy>0?-k:k)} ${tx} ${ty}`;
+  }
+  return path;
+}
+const paths = [];
+REL.forEach(([from,to,one],i) => {
+  const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+  p.setAttribute("d", anchors(nodes[from], nodes[to]));
+  p.setAttribute("stroke", ZONES[E[from].zone].color);
+  p.setAttribute("marker-end", "url(#crow)");
+  p.setAttribute("marker-start", "url(#one)");
+  if (one) p.setAttribute("stroke-dasharray","5 4");
+  p.dataset.from=from; p.dataset.to=to;
+  // nudge duplicate (course→prereq twice) so they don't overlap perfectly
+  if (i>0 && REL[i-1][0]===from && REL[i-1][1]===to) p.setAttribute("transform","translate(0,10)");
+  svg.appendChild(p); paths.push(p);
+});
+
+// focus interaction
+let focused = null;
+function setFocus(key) {
+  focused = key;
+  Object.entries(nodes).forEach(([k,el]) => {
+    el.classList.toggle("focus", k===key);
+    el.classList.toggle("dim", key && k!==key && !REL.some(r=>(r[0]===key&&r[1]===k)||(r[1]===key&&r[0]===k)));
+  });
+  paths.forEach(p => {
+    const on = !key || p.dataset.from===key || p.dataset.to===key;
+    p.style.opacity = on ? .85 : .06;
+    p.style.strokeWidth = on && key ? 2.4 : 1.6;
+  });
+}
+Object.entries(nodes).forEach(([k,el]) => {
+  el.querySelector(".ehead").addEventListener("click", () => setFocus(focused===k ? null : k));
+});
+document.getElementById("viewport").addEventListener("dblclick", e => { if(e.target.id==="viewport"||e.target.id==="canvas") setFocus(null); });
+
+// zoom + pan
+const wrap = document.getElementById("stageWrap");
+const vp = document.getElementById("viewport");
+let scale = 1;
+function fit() {
+  const pad = 48;
+  const sx = (vp.clientWidth - pad) / canvas.offsetWidth;
+  const sy = (vp.clientHeight - pad) / canvas.offsetHeight;
+  applyZoom(Math.min(sx, sy, 1));
+  vp.scrollTo(0,0);
+}
+function applyZoom(s) {
+  scale = Math.max(0.25, Math.min(1.8, s));
+  wrap.style.transform = `scale(${scale})`;
+  wrap.style.width = canvas.offsetWidth*scale + "px";
+  wrap.style.height = canvas.offsetHeight*scale + "px";
+  document.getElementById("zoomLabel").textContent = Math.round(scale*100) + "%";
+}
+document.getElementById("zoomIn").onclick = () => applyZoom(scale+0.15);
+document.getElementById("zoomOut").onclick = () => applyZoom(scale-0.15);
+document.getElementById("zoomReset").onclick = fit;
+
+// drag to pan
+let dragging=false, sx0, sy0, sl0, st0;
+vp.addEventListener("mousedown", e => {
+  if (e.target.closest(".entity")) return;
+  dragging=true; vp.classList.add("panning");
+  sx0=e.clientX; sy0=e.clientY; sl0=vp.scrollLeft; st0=vp.scrollTop;
+});
+window.addEventListener("mousemove", e => {
+  if(!dragging) return;
+  vp.scrollLeft = sl0-(e.clientX-sx0); vp.scrollTop = st0-(e.clientY-sy0);
+});
+window.addEventListener("mouseup", () => { dragging=false; vp.classList.remove("panning"); });
+
+// fade hint
+setTimeout(() => { const h=document.getElementById("hint"); h.style.transition="opacity .6s"; h.style.opacity="0"; }, 4200);
+
+applyZoom(1);
+</script>

@@ -1,0 +1,421 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  student
+  teacher
+  admin
+}
+
+enum OTPPurpose {
+  reset_password
+  register
+}
+
+enum StudentStatus {
+  active
+  graduated
+  suspended
+  retired
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+enum CurriculumStatus {
+  active
+  inactive
+}
+
+enum CourseType {
+  required
+  elective
+  general
+}
+
+enum DayOfWeek {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+enum EnrollmentStatus {
+  enrolled
+  completed
+  dropped
+  withdrawn
+  pending
+}
+
+enum CoursePlanStatus {
+  planned
+  completed
+  skipped
+}
+
+enum MakeupClassStatus {
+  scheduled
+  completed
+  cancelled
+}
+
+enum AnnouncementTarget {
+  all
+  student
+  teacher
+}
+
+enum NotificationType {
+  schedule
+  enrollment
+  announcement
+  makeup
+  system
+}
+
+enum ImportType {
+  students
+  courses
+  enrollments
+  teachers
+}
+
+enum ImportStatus {
+  processing
+  completed
+  failed
+}
+
+model User {
+  id           Int       @id @default(autoincrement()) @map("user_id")
+  email        String    @unique @db.VarChar(100)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  role         Role
+  firstName    String    @map("first_name") @db.VarChar(100)
+  lastName     String    @map("last_name") @db.VarChar(100)
+  phone        String?   @db.VarChar(20)
+  address      String?   @db.VarChar(300)
+  avatarUrl    String?   @map("avatar_url") @db.VarChar(500)
+  isActive     Boolean?  @default(true) @map("is_active")
+  approvalStatus ApprovalStatus @default(pending) @map("approval_status")
+  approvedAt   DateTime? @map("approved_at")
+  approvedBy   Int?      @map("approved_by")
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at")
+
+  otpVerifications OTPVerification[]
+  announcements    Announcement[]
+  notifications    Notification[]
+  importLogs       ImportLog[]
+
+  student Student?
+  teacher Teacher?
+
+  @@map("users")
+}
+
+model OTPVerification {
+  id        Int        @id @default(autoincrement()) @map("otp_id")
+  userId    Int        @map("user_id")
+  otpCode   String     @map("otp_code") @db.VarChar(6)
+  purpose   OTPPurpose
+  expiresAt DateTime   @map("expires_at")
+  isUsed    Boolean?   @default(false) @map("is_used")
+  createdAt DateTime?  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("otp_verifications")
+}
+
+model Faculty {
+  id          Int          @id @default(autoincrement()) @map("faculty_id")
+  name        String       @map("faculty_name") @db.VarChar(200)
+  code        String       @unique @map("faculty_code") @db.VarChar(10)
+  departments Department[]
+
+  @@map("faculties")
+}
+
+model Department {
+  id        Int     @id @default(autoincrement()) @map("department_id")
+  facultyId Int     @map("faculty_id")
+  name      String  @map("department_name") @db.VarChar(200)
+  code      String  @unique @map("department_code") @db.VarChar(10)
+
+  faculty   Faculty   @relation(fields: [facultyId], references: [id])
+  students  Student[]
+  teachers  Teacher[]
+  curriculums Curriculum[]
+  courses   Course[]
+
+  @@map("departments")
+}
+
+model Student {
+  id            Int           @id @default(autoincrement()) @map("student_id")
+  userId        Int           @unique @map("user_id")
+  studentCode   String        @unique @map("student_code") @db.VarChar(20)
+  departmentId  Int           @map("department_id")
+  admissionYear Int           @map("admission_year")
+  status        StudentStatus? @default(active)
+  advisorId     Int?          @map("advisor_id")
+  customSemesters Json?       @map("custom_semesters") // no DB default: MySQL disallows defaults on JSON; app treats null as []
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department  Department  @relation(fields: [departmentId], references: [id])
+  advisor     Teacher?    @relation("StudentAdvisor", fields: [advisorId], references: [id])
+
+  enrollments Enrollment[]
+  coursePlans CoursePlan[]
+
+  @@map("students")
+}
+
+model Teacher {
+  id             Int       @id @default(autoincrement()) @map("teacher_id")
+  userId         Int       @unique @map("user_id")
+  teacherCode    String    @unique @map("teacher_code") @db.VarChar(20)
+  departmentId   Int       @map("department_id")
+  position       String?   @db.VarChar(100)
+  officeRoom     String?   @map("office_room") @db.VarChar(100)
+  specialization String?   @db.VarChar(300)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   Department   @relation(fields: [departmentId], references: [id])
+
+  advisees       Student[] @relation("StudentAdvisor")
+  courseSections CourseSection[]
+  makeupClasses  MakeupClass[]
+  coordinatedCourses Course[] @relation("CourseCoordinator")
+
+  @@map("teachers")
+}
+
+model Curriculum {
+  id           Int              @id @default(autoincrement()) @map("curriculum_id")
+  name         String           @map("curriculum_name") @db.VarChar(300)
+  departmentId Int              @map("department_id")
+  year         Int
+  totalCredits Int              @map("total_credits")
+  status       CurriculumStatus? @default(active)
+  createdAt    DateTime?        @default(now()) @map("created_at")
+
+  department        Department         @relation(fields: [departmentId], references: [id])
+  curriculumCourses CurriculumCourse[]
+
+  @@map("curriculums")
+}
+
+model Course {
+  id           Int        @id @default(autoincrement()) @map("course_id")
+  code         String     @unique @map("course_code") @db.VarChar(20)
+  name         String     @map("course_name") @db.VarChar(300)
+  credits      Int
+  type         CourseType @map("course_type")
+  departmentId Int?       @map("department_id")
+  coordinatorId Int?      @map("coordinator_id")
+  description  String?    @db.Text
+
+  department        Department?        @relation(fields: [departmentId], references: [id])
+  coordinator       Teacher?           @relation("CourseCoordinator", fields: [coordinatorId], references: [id])
+  curriculumCourses CurriculumCourse[]
+  courseSections    CourseSection[]
+  coursePlans       CoursePlan[]
+  prerequisites     CoursePrerequisite[] @relation("CoursePrereqs")
+  isPrerequisiteOf  CoursePrerequisite[] @relation("PrereqOf")
+
+  @@map("courses")
+}
+
+model CoursePrerequisite {
+  id             Int @id @default(autoincrement())
+  courseId        Int @map("course_id")
+  prerequisiteId Int @map("prerequisite_id")
+
+  course       Course @relation("CoursePrereqs", fields: [courseId], references: [id], onDelete: Cascade)
+  prerequisite Course @relation("PrereqOf", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, prerequisiteId])
+  @@map("course_prerequisites")
+}
+
+model CurriculumCourse {
+  id           Int  @id @default(autoincrement())
+  curriculumId Int  @map("curriculum_id")
+  courseId     Int  @map("course_id")
+  semester     Int?
+  yearLevel    Int? @map("year_level")
+
+  curriculum Curriculum @relation(fields: [curriculumId], references: [id])
+  course     Course     @relation(fields: [courseId], references: [id])
+
+  @@unique([curriculumId, courseId])
+  @@map("curriculum_courses")
+}
+
+model Semester {
+  id            Int      @id @default(autoincrement()) @map("semester_id")
+  name          String   @map("semester_name") @db.VarChar(50)
+  academicYear  Int      @map("academic_year")
+  semesterNumber Int     @map("semester_number")
+  startDate     DateTime @map("start_date") @db.Date
+  endDate       DateTime @map("end_date") @db.Date
+  isCurrent     Boolean? @default(false) @map("is_current")
+  regOpenDate   DateTime? @map("reg_open_date")   // Registration window opens
+  regCloseDate  DateTime? @map("reg_close_date")  // Registration deadline
+
+  courseSections CourseSection[]
+
+  @@map("semesters")
+}
+
+model CourseSection {
+  id              Int    @id @default(autoincrement()) @map("section_id")
+  courseId        Int    @map("course_id")
+  semesterId      Int    @map("semester_id")
+  sectionNumber   String @map("section_number") @db.VarChar(10)
+  teacherId       Int    @map("teacher_id")
+  maxStudents     Int?   @default(50) @map("max_students")
+  currentStudents Int?   @default(0) @map("current_students")
+
+  course        Course        @relation(fields: [courseId], references: [id])
+  semester      Semester      @relation(fields: [semesterId], references: [id])
+  teacher       Teacher       @relation(fields: [teacherId], references: [id])
+
+  schedules     Schedule[]
+  enrollments   Enrollment[]
+  makeupClasses MakeupClass[]
+  announcements Announcement[]
+
+  @@map("course_sections")
+}
+
+model Schedule {
+  id        Int       @id @default(autoincrement()) @map("schedule_id")
+  sectionId Int       @map("section_id")
+  dayOfWeek DayOfWeek @map("day_of_week")
+  startTime DateTime  @map("start_time") @db.Time
+  endTime   DateTime  @map("end_time") @db.Time
+  room      String?   @db.VarChar(50)
+  building  String?   @db.VarChar(100)
+
+  section CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@map("schedules")
+}
+
+model Enrollment {
+  id              Int               @id @default(autoincrement()) @map("enrollment_id")
+  studentId       Int               @map("student_id")
+  sectionId       Int               @map("section_id")
+  status          EnrollmentStatus? @default(enrolled)
+  grade           String?           @db.VarChar(5)
+  attendanceScore Int?              @map("attendance_score")
+  assignmentScore Int?              @map("assignment_score")
+  midtermScore    Int?              @map("midterm_score")
+  finalScore      Int?              @map("final_score")
+  enrolledAt      DateTime?         @default(now()) @map("enrolled_at")
+
+  student Student       @relation(fields: [studentId], references: [id])
+  section CourseSection @relation(fields: [sectionId], references: [id])
+
+  @@unique([studentId, sectionId])
+  @@map("enrollments")
+}
+
+model CoursePlan {
+  id              Int               @id @default(autoincrement()) @map("plan_id")
+  studentId       Int               @map("student_id")
+  courseId        Int               @map("course_id")
+  plannedSemester Int               @map("planned_semester")
+  plannedYear     Int               @map("planned_year")
+  status          CoursePlanStatus? @default(planned)
+
+  student Student @relation(fields: [studentId], references: [id])
+  course  Course  @relation(fields: [courseId], references: [id])
+
+  @@map("course_plans")
+}
+
+model MakeupClass {
+  id           Int                @id @default(autoincrement()) @map("makeup_id")
+  sectionId    Int                @map("section_id")
+  originalDate DateTime           @map("original_date") @db.Date
+  makeupDate   DateTime           @map("makeup_date") @db.Date
+  startTime    DateTime           @map("start_time") @db.Time
+  endTime      DateTime           @map("end_time") @db.Time
+  room         String?            @db.VarChar(50)
+  reason       String?            @db.Text
+  status       MakeupClassStatus? @default(scheduled)
+  createdBy    Int                @map("created_by")
+  createdAt    DateTime?          @default(now()) @map("created_at")
+
+  section CourseSection @relation(fields: [sectionId], references: [id])
+  teacher Teacher       @relation(fields: [createdBy], references: [id])
+
+  @@map("makeup_classes")
+}
+
+model Announcement {
+  id         Int                 @id @default(autoincrement()) @map("announcement_id")
+  title      String              @db.VarChar(300)
+  content    String              @db.Text
+  targetRole AnnouncementTarget? @default(all) @map("target_role")
+  sectionId  Int?                @map("section_id")
+  isPinned   Boolean?            @default(false) @map("is_pinned")
+  status     String?             @default("เผยแพร่") @db.VarChar(50)
+  createdBy  Int                 @map("created_by")
+  createdAt  DateTime?           @default(now()) @map("created_at")
+  updatedAt  DateTime?           @default(now()) @updatedAt @map("updated_at")
+
+  user    User           @relation(fields: [createdBy], references: [id])
+  section CourseSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId])
+  @@map("announcements")
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement()) @map("notification_id")
+  userId    Int              @map("user_id")
+  title     String           @db.VarChar(300)
+  message   String?          @db.Text
+  type      NotificationType
+  isRead    Boolean?         @default(false) @map("is_read")
+  createdAt DateTime?        @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model ImportLog {
+  id          Int          @id @default(autoincrement()) @map("import_id")
+  importedBy  Int          @map("imported_by")
+  fileName    String       @map("file_name") @db.VarChar(300)
+  importType  ImportType   @map("import_type")
+  totalRows   Int?         @default(0) @map("total_rows")
+  successRows Int?         @default(0) @map("success_rows")
+  createdRows Int?         @default(0) @map("created_rows")
+  updatedRows Int?         @default(0) @map("updated_rows")
+  errorRows   Int?         @default(0) @map("error_rows")
+  status      ImportStatus? @default(processing)
+  createdAt   DateTime?    @default(now()) @map("created_at")
+
+  user User @relation(fields: [importedBy], references: [id])
+
+  @@map("import_logs")
+}
