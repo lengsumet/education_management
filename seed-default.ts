@@ -216,7 +216,37 @@ async function main() {
   await addSchedule(secDB.id, 'MON', '09:00', '12:00', 'SC45-101');
   await addSchedule(secDS.id, 'WED', '13:00', '16:00', 'SC45-102');
 
-  for (const sec of [secDB, secDS]) {
+  // ── Extra mock students: currently in year 4 and year 2 ────
+  // yearLevel = 2568 − admissionYear + 1 ; curriculum = latest year ≤ admissionYear
+  const GRADES = ['A', 'B+', 'B', 'A', 'C+', 'B+', 'B', 'A', 'C+', 'B', 'A', 'B+'];
+  const coursesInYear = (plan: [string, number, number][], yl: number) =>
+    plan.filter(([, y]) => y === yl).map(([c]) => c);
+
+  const mkStudent = async (email: string, code: string, admissionYear: number, first: string, last: string) => {
+    const u = await upsertUser(email, { role: 'student', firstName: first, lastName: last });
+    return prisma.student.upsert({
+      where: { studentCode: code },
+      update: { departmentId: dept.id, admissionYear, status: 'active', advisorId: teacher.id },
+      create: { userId: u.id, studentCode: code, departmentId: dept.id, admissionYear, status: 'active', advisorId: teacher.id },
+    });
+  };
+
+  // mock ปี 4 (admission 2565 → curriculum 2565): ผ่านปี 1-3, กำลังทำสหกิจ
+  const mockY4 = await mkStudent('student4@ku.ac.th', '6521450002', 2565, 'นภัส', 'วารีรัตน์');
+  const y4Passed = [...coursesInYear(PLAN_2565, 1), ...coursesInYear(PLAN_2565, 2), ...coursesInYear(PLAN_2565, 3)];
+  let gi = 0;
+  for (const code of y4Passed) await enrol(mockY4.id, (await sectionFor(code, pastSem.id)).id, GRADES[gi++ % GRADES.length]);
+  await enrol(mockY4.id, (await sectionFor('01418490', currentSem.id)).id, null); // สหกิจศึกษา (กำลังเรียน)
+
+  // mock ปี 2 (admission 2567 → curriculum 2565): ผ่านปี 1, กำลังเรียนปี 2
+  const mockY2 = await mkStudent('student2@ku.ac.th', '6721450001', 2567, 'ธีรภัทร', 'คงมั่น');
+  gi = 0;
+  for (const code of coursesInYear(PLAN_2565, 1)) await enrol(mockY2.id, (await sectionFor(code, pastSem.id)).id, GRADES[gi++ % GRADES.length]);
+  for (const code of ['01418211', '01418231', '01418233']) await enrol(mockY2.id, (await sectionFor(code, currentSem.id)).id, null);
+
+  // keep currentStudents counts honest for ALL current-term sections
+  const currentSecs = await prisma.courseSection.findMany({ where: { semesterId: currentSem.id }, select: { id: true } });
+  for (const sec of currentSecs) {
     const count = await prisma.enrollment.count({ where: { sectionId: sec.id } });
     await prisma.courseSection.update({ where: { id: sec.id }, data: { currentStudents: count } });
   }
@@ -224,6 +254,7 @@ async function main() {
   console.log('✓ Default seed complete (idempotent, non-destructive)');
   console.log('  All passwords = demo1234');
   console.log('   admin@ku.ac.th | teacher@ku.ac.th (T60001) | student60@ku.ac.th (2560) | student65@ku.ac.th (2565)');
+  console.log('   student4@ku.ac.th (ปี 4, สหกิจ) | student2@ku.ac.th (ปี 2)');
   console.log(`  Real KU CS curricula 2560 & 2565 · ${Object.keys(CATALOG).length} courses`);
 }
 
