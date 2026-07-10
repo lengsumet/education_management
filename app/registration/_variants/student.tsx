@@ -66,12 +66,6 @@ export default function StudentRegistration() {
           description: `ลงทะเบียนส่วนใหญ่สำเร็จ แต่มีบางรายการผิดพลาด: ${data.errors.join(", ")}`,
           variant: "destructive"
         });
-      } else if (data.warnings && data.warnings.length > 0) {
-        toast({
-          title: "ส่งคำขอแล้ว — มีวิชาที่ต้องรออนุมัติพิเศษ",
-          description: data.warnings.join(" • "),
-          className: "bg-amber-50 text-amber-900 border-amber-200"
-        });
       } else {
         toast({
           title: "สำเร็จ",
@@ -104,10 +98,19 @@ export default function StudentRegistration() {
     }) as string[];
 
   useEffect(() => {
-    if (!selectedSemester && allSemesters.length > 0) {
-      setSelectedSemester(allSemesters[0]);
-    }
-  }, [allSemesters, selectedSemester]);
+    if (selectedSemester || allSemesters.length === 0) return;
+    // Default to the earliest semester that still has courses to register
+    // (a planned term), not a past completed term — that is what this page is for.
+    const plannedSorted = [...new Set(plannedCourseSemesters)]
+      .filter(Boolean)
+      .sort((a, b) => {
+        const [termA, yearA] = a.split('/');
+        const [termB, yearB] = b.split('/');
+        if (yearA !== yearB) return parseInt(yearA) - parseInt(yearB);
+        return parseInt(termA) - parseInt(termB);
+      });
+    setSelectedSemester(plannedSorted[0] ?? allSemesters[allSemesters.length - 1]);
+  }, [allSemesters, selectedSemester, plannedCourseSemesters]);
 
   if (isLoading) {
     return (
@@ -132,6 +135,9 @@ export default function StudentRegistration() {
   }
 
   const plannedCourses = allPlannedCourses.filter((c: any) => c.semester === selectedSemester);
+  // Hard block: courses with unmet prerequisites cannot be registered at all.
+  const registrablePlanned = plannedCourses.filter((c: any) => !c.prereqLocked);
+  const lockedPlanned = plannedCourses.filter((c: any) => c.prereqLocked);
 
   // Filter registrations by selected semester
   const filteredRegistrations = allRegistrations.filter((r) => r.semester === selectedSemester);
@@ -276,17 +282,19 @@ export default function StudentRegistration() {
               </div>
               <Button
                 onClick={() => {
-                  if (plannedCourses.length === 0) {
+                  if (registrablePlanned.length === 0) {
                     toast({
-                      title: "คำเตือน",
-                      description: "ไม่มีวิชาในแผนให้ลงทะเบียน",
+                      title: "ลงทะเบียนไม่ได้",
+                      description: lockedPlanned.length > 0
+                        ? "ทุกวิชาในแผนติดวิชาบังคับก่อน ต้องผ่านวิชาบังคับก่อนจึงจะลงได้"
+                        : "ไม่มีวิชาในแผนให้ลงทะเบียน",
                       variant: "destructive"
                     });
                     return;
                   }
                   setConfirmOpen(true);
                 }}
-                disabled={enrollMutation.isPending || plannedCourses.length === 0}
+                disabled={enrollMutation.isPending || registrablePlanned.length === 0}
                 className="bg-primary hover:bg-primary-hover text-white"
               >
                 {enrollMutation.isPending ? "กำลังดำเนินการ..." : "ยืนยันการลงทะเบียนเรียน"}
@@ -297,31 +305,30 @@ export default function StudentRegistration() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>ยืนยันการลงทะเบียนเรียน</AlertDialogTitle>
                     <AlertDialogDescription>
-                      ส่งคำขอลงทะเบียน {plannedCourses.length} วิชา รวม{" "}
-                      {plannedCourses.reduce((s: number, c: any) => s + c.credits, 0)} หน่วยกิต
+                      ส่งคำขอลงทะเบียน {registrablePlanned.length} วิชา รวม{" "}
+                      {registrablePlanned.reduce((s: number, c: any) => s + c.credits, 0)} หน่วยกิต
                       {selectedSemester ? ` · ภาคเรียน ${selectedSemester}` : ""} — สถานะจะเป็น “รอพิจารณาอนุมัติ”
                     </AlertDialogDescription>
                   </AlertDialogHeader>
 
                   <div className="max-h-56 overflow-y-auto space-y-2 my-1">
-                    {plannedCourses.map((c: any) => (
-                      <div key={c.id} className={`flex items-center justify-between gap-3 text-sm border rounded-md px-3 py-2 ${c.prereqLocked ? "border-amber-300 bg-amber-50/40" : "border-slate-200"}`}>
+                    {registrablePlanned.map((c: any) => (
+                      <div key={c.id} className="flex items-center justify-between gap-3 text-sm border border-slate-200 rounded-md px-3 py-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <code className="font-mono font-bold text-primary shrink-0">{c.code}</code>
                           <span className="text-slate-700 truncate">{c.name}</span>
-                          {c.prereqLocked && <Lock size={12} className="text-amber-600 shrink-0" />}
                         </div>
                         <span className="text-slate-500 shrink-0">{c.credits} นก.</span>
                       </div>
                     ))}
                   </div>
 
-                  {plannedCourses.some((c: any) => c.prereqLocked) && (
+                  {lockedPlanned.length > 0 && (
                     <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                       <Lock size={14} className="shrink-0 mt-0.5" />
                       <span>
-                        มี {plannedCourses.filter((c: any) => c.prereqLocked).length} วิชาที่ยังไม่ผ่านวิชาบังคับก่อน
-                        — ระบบจะส่งคำขอให้ แต่ต้องรออาจารย์ที่ปรึกษาอนุมัติพิเศษก่อนจึงจะลงทะเบียนสำเร็จ
+                        {lockedPlanned.length} วิชาถูกตัดออก (ติดวิชาบังคับก่อน ลงไม่ได้):{" "}
+                        {lockedPlanned.map((c: any) => c.code).join(", ")} — ต้องผ่านวิชาบังคับก่อนจึงจะลงได้
                       </span>
                     </div>
                   )}
@@ -330,7 +337,7 @@ export default function StudentRegistration() {
                     <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={() => {
-                        const enrollPayload = plannedCourses.map((c: any) => ({
+                        const enrollPayload = registrablePlanned.map((c: any) => ({
                           courseId: c.courseId.toString(),
                           semester: selectedSemester
                         }));
@@ -355,18 +362,21 @@ export default function StudentRegistration() {
                         {course.isCompulsory && (
                           <span className="text-xs px-2 py-1 rounded font-medium bg-red-100 text-red-700">วิชาบังคับ</span>
                         )}
+                        {course.isRetake && (
+                          <span className="text-xs px-2 py-1 rounded font-medium bg-orange-100 text-orange-700">เรียนซ้ำ</span>
+                        )}
                         <span className="text-xs px-2 py-1 rounded font-medium bg-slate-100 text-slate-700">แผนเทอม {course.semester}</span>
                         {course.prereqLocked && (
-                          <span className="text-xs px-2 py-1 rounded font-medium bg-amber-100 text-amber-800 flex items-center gap-1">
-                            <Lock size={12} /> ยังไม่ผ่านวิชาบังคับก่อน
+                          <span className="text-xs px-2 py-1 rounded font-medium bg-red-100 text-red-700 flex items-center gap-1">
+                            <Lock size={12} /> ลงไม่ได้ · ติดวิชาบังคับก่อน
                           </span>
                         )}
                       </div>
                       <h3 className="font-medium text-slate-900">{course.name}</h3>
                       <p className="text-xs text-slate-500 font-bold mt-1 text-primary">{course.credits} หน่วยกิต</p>
                       {course.prereqLocked && course.missingPrereqs?.length > 0 && (
-                        <p className="text-xs text-amber-700 mt-1">
-                          ต้องผ่าน {course.missingPrereqs.map((p: any) => p.code).join(", ")} ก่อน — ลงได้แต่ต้องรออาจารย์ที่ปรึกษาอนุมัติพิเศษ
+                        <p className="text-xs text-red-600 mt-1">
+                          ต้องผ่าน {course.missingPrereqs.map((p: any) => p.code).join(", ")} ให้ได้เกรดผ่านก่อน จึงจะลงวิชานี้ได้
                         </p>
                       )}
                     </div>

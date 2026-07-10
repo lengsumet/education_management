@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
+import { classifyEnrollment, isPassingGrade } from "@/lib/grade";
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,16 +56,28 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Build completed/enrolled course sets
+    // Build course status sets from the canonical grade classifier (src/lib/grade)
+    // so the planner agrees with My Courses / dashboard / registration. A course
+    // can have several attempts; take the best outcome (passed > in_progress > failed).
     const studentWithEnrollments = student as any;
-    const completedCourseIds = new Set(
+    const passedCourseIds = new Set<number>(
       studentWithEnrollments.enrollments
-        .filter((e: any) => e.grade && e.grade !== "F")
+        .filter((e: any) => isPassingGrade(e.grade))
         .map((e: any) => e.section.courseId)
     );
-    const enrolledCourseIds = new Set(
+    const enrolledCourseIds = new Set<number>(
       studentWithEnrollments.enrollments.map((e: any) => e.section.courseId)
     );
+    const outcomeByCourse = new Map<number, "passed" | "in_progress" | "failed">();
+    for (const e of studentWithEnrollments.enrollments) {
+      const cid = e.section.courseId;
+      const cls = classifyEnrollment({ grade: e.grade, status: e.status });
+      const prev = outcomeByCourse.get(cid);
+      if (prev === "passed") continue;
+      if (cls === "passed") outcomeByCourse.set(cid, "passed");
+      else if (cls === "in_progress") outcomeByCourse.set(cid, "in_progress");
+      else if (!prev) outcomeByCourse.set(cid, "failed");
+    }
 
     // A CoursePlan row for a course that IS in the curriculum acts as a
     // term OVERRIDE (the "ย้ายเทอม" feature) — the student moved that course to
@@ -86,9 +99,11 @@ export async function GET(request: NextRequest) {
         const course = cc.course;
         curriculumCourseIds.add(course.id);
         const ov = overrideByCourseId.get(course.id);
-        let status: "completed" | "in-progress" | "planned" = "planned";
-        if (completedCourseIds.has(course.id)) status = "completed";
-        else if (enrolledCourseIds.has(course.id)) status = "in-progress";
+        let status: "completed" | "in-progress" | "failed" | "planned" = "planned";
+        const outcome = outcomeByCourse.get(course.id);
+        if (outcome === "passed") status = "completed";
+        else if (outcome === "in_progress") status = "in-progress";
+        else if (outcome === "failed") status = "failed";
 
         backbone.push({
           id: ov ? `plan-${ov.id}` : `req-${cc.id}`,
@@ -116,9 +131,11 @@ export async function GET(request: NextRequest) {
     const freeElectives: any[] = studentWithEnrollments.coursePlans
       .filter((plan: any) => !curriculumCourseIds.has(plan.courseId))
       .map((plan: any) => {
-        let status: "completed" | "in-progress" | "planned" = (plan.status as any) || "planned";
-        if (completedCourseIds.has(plan.courseId)) status = "completed";
-        else if (enrolledCourseIds.has(plan.courseId)) status = "in-progress";
+        let status: "completed" | "in-progress" | "failed" | "planned" = (plan.status as any) || "planned";
+        const outcome = outcomeByCourse.get(plan.courseId);
+        if (outcome === "passed") status = "completed";
+        else if (outcome === "in_progress") status = "in-progress";
+        else if (outcome === "failed") status = "failed";
         return {
           id: `plan-${plan.id}`,
           courseId: plan.courseId,
@@ -148,8 +165,8 @@ export async function GET(request: NextRequest) {
 
       if (prereqs.length > 0) {
         for (const p of prereqs) {
-          // If already completed, then it's fine
-          if (completedCourseIds.has(p.prerequisiteId)) continue;
+          // If the prerequisite is already passed, it's fine
+          if (passedCourseIds.has(p.prerequisiteId)) continue;
           
           // Find when the prerequisite is planned
           const plannedPrereq = allCourses.find(c => c.courseId === p.prerequisiteId);

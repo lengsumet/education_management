@@ -19,7 +19,7 @@ interface Course {
   type: "required" | "elective" | "general";
   yearLevel: number;
   semester: number;
-  status: "planned" | "completed" | "in-progress";
+  status: "planned" | "completed" | "in-progress" | "failed";
   isRequired: boolean;
   inCurriculum: boolean;   // part of the curriculum plan (locked, can be moved)
   moved?: boolean;         // moved to a non-default term
@@ -173,7 +173,7 @@ export default function StudentCoursePlanner() {
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const typeTh = (t: string) => (t === "required" ? "วิชาบังคับ" : t === "elective" ? "วิชาเลือก" : "ศึกษาทั่วไป");
-    const statusTh = (s: string) => (s === "completed" ? "เรียนผ่านแล้ว" : s === "in-progress" ? "กำลังเรียน" : "ในแผน");
+    const statusTh = (s: string) => (s === "completed" ? "เรียนผ่านแล้ว" : s === "failed" ? "ต้องเรียนซ้ำ" : s === "in-progress" ? "กำลังเรียน" : "ในแผน");
 
     const rows: (string | number)[][] = [];
     rows.push([`แผนการเรียน — ${curriculumName || ""}`]);
@@ -217,8 +217,8 @@ export default function StudentCoursePlanner() {
     const esc = (x: unknown) =>
       String(x ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
     const typeTh = (t: string) => (t === "required" ? "วิชาบังคับ/แกน" : t === "elective" ? "วิชาเลือก" : "ศึกษาทั่วไป");
-    const statusTh = (s: string) => (s === "completed" ? "เรียนผ่านแล้ว" : s === "in-progress" ? "กำลังเรียน" : "ในแผน");
-    const statusColor = (s: string) => (s === "completed" ? "#059669" : s === "in-progress" ? "#2563eb" : "#6b7280");
+    const statusTh = (s: string) => (s === "completed" ? "เรียนผ่านแล้ว" : s === "failed" ? "ต้องเรียนซ้ำ" : s === "in-progress" ? "กำลังเรียน" : "ในแผน");
+    const statusColor = (s: string) => (s === "completed" ? "#059669" : s === "failed" ? "#dc2626" : s === "in-progress" ? "#2563eb" : "#6b7280");
 
     let grand = 0;
     let body = "";
@@ -347,6 +347,8 @@ export default function StudentCoursePlanner() {
                 className={`relative flex items-start justify-between p-3 rounded-lg border transition-colors ${
                   course.status === "completed"
                     ? "bg-green-50 border-green-200 hover:border-green-300"
+                    : course.status === "failed"
+                    ? "bg-red-50 border-red-200 hover:border-red-300"
                     : course.status === "in-progress"
                     ? "bg-blue-50 border-blue-200 hover:border-blue-300"
                     : "bg-white border-slate-200 hover:border-slate-300 shadow-sm"
@@ -371,6 +373,9 @@ export default function StudentCoursePlanner() {
                     )}
                     {course.status === "completed" && (
                       <span className="text-[10px] bg-green-200 text-green-800 px-1.5 py-0.5 rounded font-medium">เรียนแล้ว</span>
+                    )}
+                    {course.status === "failed" && (
+                      <span className="text-[10px] bg-red-200 text-red-800 px-1.5 py-0.5 rounded font-medium">ต้องเรียนซ้ำ</span>
                     )}
                     {course.status === "in-progress" && (
                       <span className="text-[10px] bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded font-medium">กำลังเรียน</span>
@@ -525,6 +530,7 @@ export default function StudentCoursePlanner() {
         <div className="flex gap-4 items-center justify-center pt-4 text-xs text-slate-500">
           <div className="flex items-center gap-1.5"><Lock size={12} className="text-sky-600"/> ต้องเรียน — วิชาในหลักสูตร (ลบไม่ได้)</div>
           <div className="w-2 h-2 rounded-full bg-green-400"></div> เรียนผ่านแล้ว
+          <div className="w-2 h-2 rounded-full bg-red-400"></div> ต้องเรียนซ้ำ
           <div className="w-2 h-2 rounded-full bg-blue-400"></div> กำลังเรียน
           <div className="w-2 h-2 rounded-full bg-slate-300"></div> ยังไม่ได้เรียน(วางแผน)
         </div>

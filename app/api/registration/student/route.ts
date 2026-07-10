@@ -119,11 +119,14 @@ export async function GET(request: NextRequest) {
       admissionYear: (student as any).admissionYear
     };
 
-    // Format course plans
+    // Format course plans. NOTE: CoursePlan.plannedYear is the YEAR LEVEL (1–4),
+    // the same convention the course-planner writes. Convert it to an academic
+    // year for the semester label so registration and planner stay consistent.
     const plannedCourses = (student as any).coursePlans.map((plan: any) => {
+      const planAcademicYear = (student.admissionYear ?? 0) + plan.plannedYear - 1;
       return {
         id: plan.id,
-        semester: `${plan.plannedSemester}/${plan.plannedYear}`,
+        semester: `${plan.plannedSemester}/${planAcademicYear}`,
         courseId: plan.course.id,
         code: plan.course.code,
         name: plan.course.name,
@@ -144,28 +147,48 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // --- AUTO-PULL REQUIRED CURRICULUM COURSES ---
+    // --- AUTO-PULL COURSES FOR THE ACTIVE REGISTRATION TERM ONLY ---
+    // Registration is scoped to the single semester currently open for
+    // registration — NOT the whole 4-year curriculum. We offer:
+    //   (a) this term's required curriculum courses not yet passed, and
+    //   (b) any previously-failed course (retake, e.g. an F), shown under
+    //       the active term so the student can re-register it.
     let activeSemester = await prisma.semester.findFirst({ where: { isCurrent: true } });
     if (!activeSemester) {
       activeSemester = await prisma.semester.findFirst({ orderBy: [{ academicYear: 'desc' }, { semesterNumber: 'desc' }] });
     }
+    const activeSemesterLabel = activeSemester
+      ? `${activeSemester.semesterNumber}/${activeSemester.academicYear}`
+      : null;
+
+    const enrollmentsForPull = (student as any).enrollments;
+    const passedForPull = getPassedCourseIds(enrollmentsForPull);
+    // Currently studying or awaiting approval — don't offer again.
+    const inProgressCourseIds = new Set(
+      enrollmentsForPull
+        .filter((e: any) => e.status === 'enrolled' || e.status === 'pending')
+        .map((e: any) => e.section.courseId)
+    );
+    // Attempted but not passed (has a final grade that isn't a pass) => retake.
+    const needRetakeCourseIds = new Set(
+      enrollmentsForPull
+        .filter((e: any) => e.grade && !passedForPull.has(e.section.courseId))
+        .map((e: any) => e.section.courseId)
+    );
+    const existingPlanCourseIds = new Set((student as any).coursePlans.map((p: any) => p.courseId));
 
     let curriculumCoursesToAdd: any[] = [];
-    if (student.admissionYear) {
+    if (student.admissionYear && activeSemester) {
+      const studentYearLevel = Math.max(1, activeSemester.academicYear - student.admissionYear + 1);
+
       const studentCurriculum = await prisma.curriculum.findFirst({
-        where: {
-          departmentId: student.departmentId,
-          year: { lte: student.admissionYear }
-        },
+        where: { departmentId: student.departmentId, year: { lte: student.admissionYear } },
         orderBy: { year: 'desc' }
       });
 
       if (studentCurriculum) {
-        const requiredCourses = await prisma.curriculumCourse.findMany({
-          where: {
-            curriculumId: studentCurriculum.id,
-            yearLevel: { lte: 4, gte: 1 } // Pull Year 1 to 4
-          },
+        const curriculumCourses = await prisma.curriculumCourse.findMany({
+          where: { curriculumId: studentCurriculum.id },
           include: {
             course: {
               include: {
@@ -177,28 +200,29 @@ export async function GET(request: NextRequest) {
           }
         });
 
-        const existingPlanCourseIds = new Set((student as any).coursePlans.map((p: any) => p.courseId));
-        const enrolledCourseIds = new Set((student as any).enrollments
-          .filter((e: any) => e.status !== "dropped" && e.status !== "withdrawn")
-          .map((e: any) => e.section.courseId));
+        for (const req of curriculumCourses) {
+          const isCurrentTerm =
+            (req.yearLevel || 1) === studentYearLevel &&
+            (req.semester || 1) === activeSemester.semesterNumber;
+          const isRetake = needRetakeCourseIds.has(req.courseId);
 
-        for (const req of requiredCourses) {
-          if (!existingPlanCourseIds.has(req.courseId) && !enrolledCourseIds.has(req.courseId)) {
-            const courseAcademicYear = student.admissionYear + (req.yearLevel || 1) - 1;
-            const courseSemesterNumber = req.semester || 1;
-            const pseudoSemester = `${courseSemesterNumber}/${courseAcademicYear}`;
+          if (!isCurrentTerm && !isRetake) continue;             // not this term's course, not a retake
+          if (passedForPull.has(req.courseId)) continue;         // already passed
+          if (existingPlanCourseIds.has(req.courseId)) continue; // already in student's plan
+          if (inProgressCourseIds.has(req.courseId)) continue;   // already registering / studying
 
-            curriculumCoursesToAdd.push({
-              id: `curr-${req.id}`,
-              semester: pseudoSemester,
-              courseId: req.course.id,
-              code: req.course.code,
-              name: req.course.name,
-              credits: req.course.credits,
-              isCompulsory: req.course.type === 'required',
-              availableSections: req.course.courseSections
-                .filter((sec: any) => sec.semester?.academicYear === courseAcademicYear && sec.semester?.semesterNumber === courseSemesterNumber)
-                .map((sec: any) => ({
+          curriculumCoursesToAdd.push({
+            id: `curr-${req.id}`,
+            semester: activeSemesterLabel,
+            courseId: req.course.id,
+            code: req.course.code,
+            name: req.course.name,
+            credits: req.course.credits,
+            isCompulsory: req.course.type === 'required',
+            isRetake,
+            availableSections: req.course.courseSections
+              .filter((sec: any) => sec.semesterId === activeSemester!.id)
+              .map((sec: any) => ({
                 sectionId: sec.id,
                 sectionNumber: sec.sectionNumber,
                 teacherName: sec.teacher?.name || "ไม่ระบุ",
@@ -210,13 +234,59 @@ export async function GET(request: NextRequest) {
                   room: sch.room || "TBA"
                 }))
               }))
-            });
-          }
+          });
         }
       }
     }
 
-    const finalPlannedCourses = [...plannedCourses, ...curriculumCoursesToAdd];
+    // Retakes not covered above (a failed course not in the curriculum backbone,
+    // e.g. a failed math course) — offer them in the active term so the student
+    // can re-register and clear the prerequisite.
+    if (activeSemester) {
+      const alreadyPulled = new Set(curriculumCoursesToAdd.map((c: any) => c.courseId));
+      const retakeOnly = [...needRetakeCourseIds].filter((cid: any) =>
+        !alreadyPulled.has(cid) && !passedForPull.has(cid) &&
+        !existingPlanCourseIds.has(cid) && !inProgressCourseIds.has(cid)
+      );
+      if (retakeOnly.length > 0) {
+        const retakeCourses = await prisma.course.findMany({
+          where: { id: { in: retakeOnly as number[] } },
+          include: { courseSections: { include: { teacher: true, schedules: true, semester: true } } },
+        });
+        for (const course of retakeCourses) {
+          curriculumCoursesToAdd.push({
+            id: `retake-${course.id}`,
+            semester: activeSemesterLabel,
+            courseId: course.id,
+            code: course.code,
+            name: course.name,
+            credits: course.credits,
+            isCompulsory: course.type === 'required',
+            isRetake: true,
+            availableSections: course.courseSections
+              .filter((sec: any) => sec.semesterId === activeSemester!.id)
+              .map((sec: any) => ({
+                sectionId: sec.id,
+                sectionNumber: sec.sectionNumber,
+                teacherName: sec.teacher?.name || "ไม่ระบุ",
+                currentStudents: sec.currentStudents || 0,
+                maxStudents: sec.maxStudents || 50,
+                schedules: sec.schedules.map((sch: any) => ({
+                  day: sch.dayOfWeek,
+                  time: `${new Date(sch.startTime).toISOString().slice(11, 16)} - ${new Date(sch.endTime).toISOString().slice(11, 16)}`,
+                  room: sch.room || "TBA"
+                }))
+              }))
+          });
+        }
+      }
+    }
+
+    // Only the active registration term's courses appear in the plan section
+    // (student's own coursePlans for that term + auto-pulled). Past/future
+    // planned terms are managed on the course-planner page, not here.
+    const finalPlannedCourses = [...plannedCourses, ...curriculumCoursesToAdd]
+      .filter((c: any) => !activeSemesterLabel || c.semester === activeSemesterLabel);
 
     // --- Attach prerequisite lock status to each planned course (UI badge) ---
     const passedCourseIds = getPassedCourseIds((student as any).enrollments);
@@ -296,7 +366,6 @@ export async function POST(request: NextRequest) {
 
     const results = [];
     const errors = [];
-    const warnings: string[] = []; // soft prereq notices — enrolment still created, awaiting override
 
     for (const item of enrollments) {
       const { courseId, semester } = item;
@@ -342,15 +411,15 @@ export async function POST(request: NextRequest) {
         include: { prerequisites: { include: { prerequisite: true } } }
       });
 
-      // --- Prerequisite Check (SOFT) ---
-      // Unmet prereqs do NOT block registration; the enrolment is still created as
-      // pending but tagged so the approver (advisor/admin) can override or reject.
-      let prereqWarning: string | null = null;
+      // --- Prerequisite Check (HARD) ---
+      // Unmet prerequisites hard-block registration: no enrolment is created.
+      // The student must pass the prerequisite first — no advisor override.
       if (course?.prerequisites && course.prerequisites.length > 0) {
         const unmet = computeUnmetPrereqs(course.prerequisites, passedCourseIds);
         if (unmet.length > 0) {
-          prereqWarning = unmet.map(p => p.code).join(", ");
-          warnings.push(`วิชา ${course.code} ยังไม่ผ่านวิชาบังคับก่อน (${prereqWarning}) — ส่งคำขอแล้ว รออาจารย์ที่ปรึกษาพิจารณาอนุมัติพิเศษ`);
+          const codes = unmet.map(p => p.code).join(", ");
+          errors.push(`วิชา ${course.code} ต้องผ่าน ${codes} ก่อนจึงจะลงทะเบียนได้`);
+          continue; // hard block — skip this course
         }
       }
 
@@ -402,14 +471,12 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Create enrollment as pending (awaiting advisor). Carries the prereq
-      // warning so the approver sees why it needs an override.
+      // Create enrollment as pending (awaiting advisor approval).
       const newEnrollment = await prisma.enrollment.create({
         data: {
           studentId: student.id,
           sectionId: sectionId,
           status: "pending",
-          prereqWarning,
           enrolledAt: new Date()
         }
       });
@@ -428,7 +495,7 @@ export async function POST(request: NextRequest) {
       results.push(newEnrollment);
     }
 
-    return NextResponse.json({ success: true, results, errors, warnings });
+    return NextResponse.json({ success: true, results, errors });
   } catch (error: any) {
     console.error("Registration POST Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
