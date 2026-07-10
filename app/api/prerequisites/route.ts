@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { getPassedCourseIds } from "@/lib/prerequisites";
 
 // GET /api/prerequisites?courseId=X — ดู prerequisites ของวิชา + reverse dependencies
 // GET /api/prerequisites?courseId=X&action=check&studentId=Y — ตรวจสอบว่านิสิตลงวิชานี้ได้ไหม
@@ -72,7 +73,6 @@ export async function GET(req: NextRequest) {
         where: { userId: session.userId },
         include: {
           enrollments: {
-            where: { status: "completed" },
             include: { section: { select: { courseId: true } } },
           },
         },
@@ -82,13 +82,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ success: false, message: "Student not found" }, { status: 404 });
       }
 
-      // วิชาที่ผ่านแล้ว (completed + grade ไม่ใช่ F)
-      const passedCourseIds = new Set<number>();
-      for (const enrollment of (student as any).enrollments) {
-        if (enrollment.grade && enrollment.grade !== "F") {
-          passedCourseIds.add(enrollment.section.courseId);
-        }
-      }
+      // วิชาที่ผ่านแล้ว (เกรด A–D เท่านั้น) — src/lib/prerequisites
+      const passedCourseIds = getPassedCourseIds((student as any).enrollments);
 
       // prerequisites ของวิชาที่จะลง
       const prerequisites = await prisma.coursePrerequisite.findMany({
@@ -156,19 +151,13 @@ export async function GET(req: NextRequest) {
           where: { userId: session.userId },
           include: {
             enrollments: {
-              where: { status: "completed" },
               include: { section: { select: { courseId: true } } },
             },
           },
         });
 
         if (student) {
-          const passedCourseIds = new Set<number>();
-          for (const enrollment of (student as any).enrollments) {
-            if (enrollment.grade && enrollment.grade !== "F") {
-              passedCourseIds.add(enrollment.section.courseId);
-            }
-          }
+          const passedCourseIds = getPassedCourseIds((student as any).enrollments);
 
           studentImpact = {
             actuallyBlocked: blockedCourses.filter((c) => !passedCourseIds.has(c.id)),

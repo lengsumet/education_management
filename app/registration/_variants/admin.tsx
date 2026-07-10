@@ -5,7 +5,7 @@ import Layout from "@/components/Layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CheckCircle, XCircle, Clock, Loader2, BookOpen, Filter, Search, ChevronLeft, ChevronRight, Eye, X, User } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Loader2, BookOpen, Filter, Search, ChevronLeft, ChevronRight, Eye, X, User, AlertTriangle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +23,7 @@ interface RegistrationRequest {
   credits: number;
   semester: string;
   status: string;
+  prereqWarning?: string | null;
   enrolledAt: string;
 }
 
@@ -403,6 +404,11 @@ export default function AdminRegistration() {
 
                     {/* Right: Summary + Action */}
                     <div className="flex items-center gap-4">
+                      {group.courses.some(c => c.prereqWarning) && (
+                        <span className="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-800 items-center gap-1 hidden sm:flex">
+                          <AlertTriangle size={12} /> ติดวิชาบังคับก่อน
+                        </span>
+                      )}
                       <div className="text-right hidden sm:block">
                         <p className="text-sm font-bold text-slate-900">{group.courses.length} วิชา</p>
                         <p className="text-xs text-slate-500">{group.totalCredits} หน่วยกิต</p>
@@ -510,14 +516,24 @@ export default function AdminRegistration() {
                       {courses.map((course) => (
                         <div
                           key={course.id}
-                          className="p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                          className={`p-3 rounded-lg border transition-colors ${course.prereqWarning ? "border-amber-200 bg-amber-50/50 hover:bg-amber-50" : "border-slate-100 bg-slate-50/50 hover:bg-slate-50"}`}
                         >
                           <div className="flex items-start justify-between">
                             <div>
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <code className="text-sm font-mono font-bold text-primary">{course.courseCode}</code>
+                                {course.prereqWarning && (
+                                  <span className="text-xs px-2 py-0.5 rounded font-medium bg-amber-100 text-amber-800 flex items-center gap-1">
+                                    <AlertTriangle size={12} /> ยังไม่ผ่านวิชาบังคับก่อน
+                                  </span>
+                                )}
                               </div>
                               <p className="text-sm text-slate-800">{course.courseName}</p>
+                              {course.prereqWarning && (
+                                <p className="text-xs text-amber-700 mt-1">
+                                  ต้องผ่าน {course.prereqWarning} ก่อน — การอนุมัติถือเป็นการยกเว้น (override)
+                                </p>
+                              )}
                               <p className="text-xs text-slate-400 mt-1">ยื่นเมื่อ {course.enrolledAt}</p>
                             </div>
                             <div className="text-right shrink-0">

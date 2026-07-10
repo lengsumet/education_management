@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import Layout from "@/components/Layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, AlertCircle, Clock, Loader2, BookPlus, ChevronRight, Printer } from "lucide-react";
+import { CheckCircle, AlertCircle, Clock, Loader2, BookPlus, ChevronRight, Printer, Lock } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -65,6 +65,12 @@ export default function StudentRegistration() {
           title: "มีบางรายการผิดพลาด",
           description: `ลงทะเบียนส่วนใหญ่สำเร็จ แต่มีบางรายการผิดพลาด: ${data.errors.join(", ")}`,
           variant: "destructive"
+        });
+      } else if (data.warnings && data.warnings.length > 0) {
+        toast({
+          title: "ส่งคำขอแล้ว — มีวิชาที่ต้องรออนุมัติพิเศษ",
+          description: data.warnings.join(" • "),
+          className: "bg-amber-50 text-amber-900 border-amber-200"
         });
       } else {
         toast({
@@ -299,15 +305,26 @@ export default function StudentRegistration() {
 
                   <div className="max-h-56 overflow-y-auto space-y-2 my-1">
                     {plannedCourses.map((c: any) => (
-                      <div key={c.id} className="flex items-center justify-between gap-3 text-sm border border-slate-200 rounded-md px-3 py-2">
+                      <div key={c.id} className={`flex items-center justify-between gap-3 text-sm border rounded-md px-3 py-2 ${c.prereqLocked ? "border-amber-300 bg-amber-50/40" : "border-slate-200"}`}>
                         <div className="flex items-center gap-2 min-w-0">
                           <code className="font-mono font-bold text-primary shrink-0">{c.code}</code>
                           <span className="text-slate-700 truncate">{c.name}</span>
+                          {c.prereqLocked && <Lock size={12} className="text-amber-600 shrink-0" />}
                         </div>
                         <span className="text-slate-500 shrink-0">{c.credits} นก.</span>
                       </div>
                     ))}
                   </div>
+
+                  {plannedCourses.some((c: any) => c.prereqLocked) && (
+                    <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                      <Lock size={14} className="shrink-0 mt-0.5" />
+                      <span>
+                        มี {plannedCourses.filter((c: any) => c.prereqLocked).length} วิชาที่ยังไม่ผ่านวิชาบังคับก่อน
+                        — ระบบจะส่งคำขอให้ แต่ต้องรออาจารย์ที่ปรึกษาอนุมัติพิเศษก่อนจึงจะลงทะเบียนสำเร็จ
+                      </span>
+                    </div>
+                  )}
 
                   <AlertDialogFooter>
                     <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
@@ -330,18 +347,28 @@ export default function StudentRegistration() {
 
             <div className="space-y-3">
               {plannedCourses.map((course: any) => (
-                <div key={course.id} className="p-4 rounded-lg border border-slate-200 bg-white">
+                <div key={course.id} className={`p-4 rounded-lg border bg-white ${course.prereqLocked ? "border-amber-300 bg-amber-50/40" : "border-slate-200"}`}>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <code className="text-sm font-mono font-bold text-primary">{course.code}</code>
                         {course.isCompulsory && (
                           <span className="text-xs px-2 py-1 rounded font-medium bg-red-100 text-red-700">วิชาบังคับ</span>
                         )}
                         <span className="text-xs px-2 py-1 rounded font-medium bg-slate-100 text-slate-700">แผนเทอม {course.semester}</span>
+                        {course.prereqLocked && (
+                          <span className="text-xs px-2 py-1 rounded font-medium bg-amber-100 text-amber-800 flex items-center gap-1">
+                            <Lock size={12} /> ยังไม่ผ่านวิชาบังคับก่อน
+                          </span>
+                        )}
                       </div>
                       <h3 className="font-medium text-slate-900">{course.name}</h3>
                       <p className="text-xs text-slate-500 font-bold mt-1 text-primary">{course.credits} หน่วยกิต</p>
+                      {course.prereqLocked && course.missingPrereqs?.length > 0 && (
+                        <p className="text-xs text-amber-700 mt-1">
+                          ต้องผ่าน {course.missingPrereqs.map((p: any) => p.code).join(", ")} ก่อน — ลงได้แต่ต้องรออาจารย์ที่ปรึกษาอนุมัติพิเศษ
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

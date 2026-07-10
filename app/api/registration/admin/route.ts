@@ -95,6 +95,8 @@ export async function GET(request: NextRequest) {
           ? `${semester.semesterNumber}/${semester.academicYear}`
           : "ไม่ระบุ",
         status: enrollment.status,
+        // Non-null => student had unmet prerequisites; approving is an override.
+        prereqWarning: enrollment.prereqWarning || null,
         enrolledAt: enrollment.enrolledAt
           ? new Date(enrollment.enrolledAt).toLocaleDateString("th-TH", {
               day: "numeric",

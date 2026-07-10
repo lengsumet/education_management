@@ -327,6 +327,7 @@ model Enrollment {
   assignmentScore Int?              @map("assignment_score")
   midtermScore    Int?              @map("midterm_score")
   finalScore      Int?              @map("final_score")
+  prereqWarning   String?           @map("prereq_warning") @db.Text // null = prereqs met; else comma-separated unmet prereq codes (awaiting approver override)
   enrolledAt      DateTime?         @default(now()) @map("enrolled_at")
 
   student Student       @relation(fields: [studentId], references: [id])

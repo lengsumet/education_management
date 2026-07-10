@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { CourseType } from "@prisma/client";
+import { findCyclicPrereqs } from "@/lib/prerequisites";
 
 async function getNextTbaRoom() {
   const existingTbas = await prisma.schedule.findMany({ where: { room: { startsWith: "TBA" } }, select: { room: true } });
@@ -251,6 +252,26 @@ export async function PUT(request: NextRequest) {
     let pType: CourseType = "general" as CourseType;
     if (type === "วิชาบังคับ") pType = "required" as CourseType;
     else if (type === "วิชาเลือก") pType = "elective" as CourseType;
+
+    // Guard: a prerequisite must not point at the course itself or form a cycle
+    // (A requires B while B already requires A), which would be un-satisfiable.
+    if (Array.isArray(prerequisites) && prerequisites.length > 0) {
+      const prereqIds = prerequisites
+        .map((pId: string) => parseInt(pId))
+        .filter((n: number) => !isNaN(n));
+      const unsafe = await findCyclicPrereqs(prisma, parseInt(id), prereqIds);
+      if (unsafe.length > 0) {
+        const badCourses = await prisma.course.findMany({
+          where: { id: { in: unsafe } },
+          select: { code: true },
+        });
+        const codes = badCourses.map((c) => c.code).join(", ") || "วิชาตัวเอง";
+        return NextResponse.json(
+          { message: `ไม่สามารถตั้งวิชาบังคับก่อนที่ทำให้เกิดวงจรได้ (${codes})` },
+          { status: 400 },
+        );
+      }
+    }
 
     const updatedCourse = await prisma.course.update({
       where: { id: parseInt(id) },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
+import { getPassedCourseIds, computeUnmetPrereqs } from "@/lib/prerequisites";
 
 export async function GET(request: NextRequest) {
   try {
@@ -217,12 +218,42 @@ export async function GET(request: NextRequest) {
 
     const finalPlannedCourses = [...plannedCourses, ...curriculumCoursesToAdd];
 
+    // --- Attach prerequisite lock status to each planned course (UI badge) ---
+    const passedCourseIds = getPassedCourseIds((student as any).enrollments);
+    const plannedCourseIds = finalPlannedCourses
+      .map((c: any) => Number(c.courseId))
+      .filter((id: number) => !isNaN(id));
+
+    const prereqLinks = plannedCourseIds.length > 0
+      ? await prisma.coursePrerequisite.findMany({
+          where: { courseId: { in: plannedCourseIds } },
+          include: { prerequisite: { select: { id: true, code: true, name: true } } },
+        })
+      : [];
+
+    const prereqsByCourse = new Map<number, typeof prereqLinks>();
+    for (const link of prereqLinks) {
+      const arr = prereqsByCourse.get(link.courseId) ?? [];
+      arr.push(link);
+      prereqsByCourse.set(link.courseId, arr);
+    }
+
+    const plannedWithPrereq = finalPlannedCourses.map((c: any) => {
+      const links = prereqsByCourse.get(Number(c.courseId)) ?? [];
+      const missing = computeUnmetPrereqs(links as any, passedCourseIds);
+      return {
+        ...c,
+        prereqLocked: missing.length > 0,
+        missingPrereqs: missing.map((m) => ({ code: m.code, name: m.name })),
+      };
+    });
+
     return NextResponse.json({
       success: true,
       data: {
         studentInfo,
         registrations,
-        plannedCourses: finalPlannedCourses,
+        plannedCourses: plannedWithPrereq,
         stats: {
           approved: approved.length,
           pending: pending.length,
@@ -254,22 +285,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "No courses selected" }, { status: 400 });
     }
 
-    const student = await prisma.student.findUnique({ 
+    const student = await prisma.student.findUnique({
       where: { userId: payload.userId },
       include: { enrollments: { include: { section: true } } }
     });
     if (!student) return NextResponse.json({ message: "Student not found" }, { status: 404 });
 
-    // Pre-calculate passed courses for prerequisite checking
-    const passedCourseIds = new Set<number>();
-    for (const enrollment of (student as any).enrollments) {
-      if (enrollment.grade && enrollment.grade !== "F") {
-        passedCourseIds.add(enrollment.section.courseId);
-      }
-    }
+    // Passed courses (A–D only) — single source of truth in src/lib/prerequisites.
+    const passedCourseIds = getPassedCourseIds((student as any).enrollments);
 
     const results = [];
     const errors = [];
+    const warnings: string[] = []; // soft prereq notices — enrolment still created, awaiting override
 
     for (const item of enrollments) {
       const { courseId, semester } = item;
@@ -310,18 +337,20 @@ export async function POST(request: NextRequest) {
       }
 
       // Fetch course details for friendly error and prerequisite check
-      const course = await prisma.course.findUnique({ 
+      const course = await prisma.course.findUnique({
         where: { id: Number(courseId) },
         include: { prerequisites: { include: { prerequisite: true } } }
       });
 
-      // --- Prerequisite Check ---
+      // --- Prerequisite Check (SOFT) ---
+      // Unmet prereqs do NOT block registration; the enrolment is still created as
+      // pending but tagged so the approver (advisor/admin) can override or reject.
+      let prereqWarning: string | null = null;
       if (course?.prerequisites && course.prerequisites.length > 0) {
-        const unmetPrereqs = course.prerequisites.filter(p => !passedCourseIds.has(p.prerequisiteId));
-        if (unmetPrereqs.length > 0) {
-          const prereqNames = unmetPrereqs.map(p => p.prerequisite.code).join(", ");
-          errors.push(`วิชา ${course.code} ต้องผ่าน ${prereqNames} ก่อนลงทะเบียน`);
-          continue; // Skip registration for this course
+        const unmet = computeUnmetPrereqs(course.prerequisites, passedCourseIds);
+        if (unmet.length > 0) {
+          prereqWarning = unmet.map(p => p.code).join(", ");
+          warnings.push(`วิชา ${course.code} ยังไม่ผ่านวิชาบังคับก่อน (${prereqWarning}) — ส่งคำขอแล้ว รออาจารย์ที่ปรึกษาพิจารณาอนุมัติพิเศษ`);
         }
       }
 
@@ -373,12 +402,14 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Create enrollment as pending (awaiting advisor)
+      // Create enrollment as pending (awaiting advisor). Carries the prereq
+      // warning so the approver sees why it needs an override.
       const newEnrollment = await prisma.enrollment.create({
         data: {
           studentId: student.id,
           sectionId: sectionId,
-          status: "pending", 
+          status: "pending",
+          prereqWarning,
           enrolledAt: new Date()
         }
       });
@@ -397,7 +428,7 @@ export async function POST(request: NextRequest) {
       results.push(newEnrollment);
     }
 
-    return NextResponse.json({ success: true, results, errors });
+    return NextResponse.json({ success: true, results, errors, warnings });
   } catch (error: any) {
     console.error("Registration POST Error:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });

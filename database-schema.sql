@@ -188,6 +188,7 @@ CREATE TABLE enrollments (
     assignment_score INT,
     midterm_score    INT,
     final_score      INT,
+    prereq_warning   TEXT,                                 -- NULL = prereqs met; else unmet prereq codes awaiting approver override
     enrolled_at      DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
     FOREIGN KEY (student_id) REFERENCES students(student_id),
     FOREIGN KEY (section_id) REFERENCES course_sections(section_id),
